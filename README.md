@@ -119,7 +119,7 @@ A simple JSON database helps to store the json file based data into your current
 To install:
 
 ```
-go install https://github.com/pnkj-kmr/simple-json-db
+go install github.com/pnkj-kmr/simple-json-db
 ```
 
 ## FAQ?
