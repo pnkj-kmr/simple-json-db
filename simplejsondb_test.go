@@ -75,9 +75,43 @@ func TestInsert(t *testing.T) {
 	}
 }
 
+func TestGZipInsert(t *testing.T) {
+	path := "database1"
+	db, err := simplejsondb.New(path, &simplejsondb.Options{UseGzip: true})
+	if err != nil {
+		t.Error(err)
+	}
+	c, err := db.Collection("collection1")
+	if err != nil {
+		t.Error(err)
+	}
+	var data []byte
+	data = append(data, 99)
+	err = c.Create("ip-dummy", data)
+	if err != nil {
+		t.Error("Test failed - ", err)
+	}
+}
+
 func TestGet2(t *testing.T) {
 	path := "database1"
 	db, err := simplejsondb.New(path, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	c, err := db.Collection("collection1")
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = c.Get("ip-dummy")
+	if os.IsNotExist(err) {
+		t.Error("Test failed - ", err)
+	}
+}
+
+func TestGetGZip(t *testing.T) {
+	path := "database1"
+	db, err := simplejsondb.New(path, &simplejsondb.Options{UseGzip: true})
 	if err != nil {
 		t.Error(err)
 	}

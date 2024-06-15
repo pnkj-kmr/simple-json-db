@@ -1,9 +1,13 @@
 package simplejsondb
 
 import (
+	"bytes"
+	"compress/gzip"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	zrl "github.com/pnkj-kmr/zap-rotate-logger"
@@ -11,7 +15,34 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-const _ext string = ".json"
+var Ext string = ".json"
+var GZipExt string = ".json.gz"
+
+type (
+	// Options - extra configuration
+	Options struct {
+		UseGzip bool
+		Logger
+	}
+
+	CreateOptions struct {
+		UseGzip bool
+	}
+
+	_db struct {
+		useGzip bool
+		path    string
+		logger  Logger
+	}
+
+	_collection struct {
+		useGzip bool
+		mu      sync.Mutex
+		name    string
+		path    string
+		logger  Logger
+	}
+)
 
 type (
 	// Logger - logging interface
@@ -26,31 +57,12 @@ type (
 	Collection interface {
 		Get(string) ([]byte, error)
 		GetAll() [][]byte
-		Create(string, []byte) error
+		Create(string, []byte, ...CreateOptions) error
 		Delete(string) error
 	}
 	// DB - a database
 	DB interface {
 		Collection(string) (Collection, error)
-	}
-)
-
-type (
-	// Options - extra configuration
-	Options struct {
-		Logger
-	}
-
-	_db struct {
-		path   string
-		logger Logger
-	}
-
-	_collection struct {
-		mu     sync.Mutex
-		name   string
-		path   string
-		logger Logger
 	}
 )
 
@@ -70,7 +82,7 @@ func New(dbname string, options *Options) (db DB, err error) {
 		fmt.Println(err)
 		return nil, err
 	}
-	return &_db{path: dbpath, logger: opts.Logger}, nil
+	return &_db{path: dbpath, logger: opts.Logger, useGzip: opts.UseGzip}, nil
 }
 
 // Collection returns the collection or table
@@ -85,7 +97,7 @@ func (db *_db) Collection(name string) (c Collection, err error) {
 		db.logger.Error("not a db directory")
 		return nil, fmt.Errorf("not a directory")
 	}
-	return &_collection{name: name, path: collection, logger: db.logger}, nil
+	return &_collection{name: name, path: collection, logger: db.logger, useGzip: db.useGzip}, nil
 }
 
 // GetAll - returns all records
@@ -103,6 +115,14 @@ func (c *_collection) GetAll() (data [][]byte) {
 				c.logger.Error("unable to read the data file", zap.String("path", fPath))
 				continue
 			}
+
+			if strings.LastIndex(r.Name(), GZipExt) > 0 {
+				record, err = UnGzip(record)
+				if err != nil {
+					c.logger.Error("unable to unzip the data file", zap.String("path", fPath))
+				}
+			}
+
 			data = append(data, record)
 		}
 	}
@@ -111,31 +131,41 @@ func (c *_collection) GetAll() (data [][]byte) {
 
 // Get help to retrive key based record
 func (c *_collection) Get(key string) (data []byte, err error) {
-	record := key + _ext
-	fPath := filepath.Join(c.path, record)
-	r, err := os.Stat(fPath)
-	if err != nil {
-		c.logger.Error("no data record available", zap.Error(err))
-		return
-	}
-	if r.IsDir() {
-		c.logger.Warn("invalid record")
-		return nil, fmt.Errorf("invalid record key")
-	}
-	data, err = os.ReadFile(fPath)
+	filename, err, isGzip := c.getPathIfExist(key, err)
+	data, err = os.ReadFile(filename)
 	if err != nil {
 		c.logger.Error("unable to read the record", zap.Error(err))
-		return
 	}
+
+	if isGzip {
+		data, err = UnGzip(data)
+		if err != nil {
+			c.logger.Error("unable to unzip the data file", zap.String("path", filename))
+		}
+	}
+
 	return
 }
 
 // Insert - helps to save data into model dir
-func (c *_collection) Create(key string, data []byte) (err error) {
+func (c *_collection) Create(key string, data []byte, options ...CreateOptions) (err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	record := key + _ext
-	err = os.WriteFile(filepath.Join(c.path, record), data, os.ModePerm)
+	var useGzip bool = c.useGzip
+	if !c.useGzip {
+		if options != nil && options[0].UseGzip {
+			useGzip = options[0].UseGzip
+		}
+	}
+	filename := c.getFullPath(key, c.useGzip)
+	if err != nil {
+		c.logger.Error("unable to create record", zap.Error(err))
+	}
+
+	if useGzip {
+		data, err = c.Gzip(data)
+	}
+	err = os.WriteFile(filename, data, os.ModePerm)
 	if err != nil {
 		c.logger.Error("unable to create record", zap.Error(err))
 	}
@@ -146,11 +176,17 @@ func (c *_collection) Create(key string, data []byte) (err error) {
 func (c *_collection) Delete(key string) (err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	record := key + _ext
-	err = os.Remove(filepath.Join(c.path, record))
+
+	filename, err, _ := c.getPathIfExist(key, err)
+	if err != nil {
+		return err
+	}
+
+	err = os.Remove(filename)
 	if err != nil {
 		c.logger.Error("unable to delete record", zap.Error(err))
 	}
+
 	return
 }
 
@@ -172,4 +208,77 @@ func getOrCreateDir(path string) (os.FileInfo, error) {
 		return f, err
 	}
 	return f, nil
+}
+
+func (c *_collection) getFullPath(key string, isGzip bool) string {
+	var record string
+	if isGzip {
+		record = key + GZipExt
+	} else {
+		record = key + Ext
+	}
+	filename := filepath.Join(c.path, record)
+
+	return filename
+}
+
+func (c *_collection) getPathIfExist(key string, err error) (string, error, bool) {
+	record := key + Ext
+	filename := filepath.Join(c.path, record)
+
+	if success, err := c.isExist(filename, err); !success {
+		record = key + GZipExt
+		filename = filepath.Join(c.path, record)
+		if success, err := c.isExist(filename, err); !success {
+			return "", err, false
+		}
+
+		return filename, nil, true
+	}
+
+	return filename, nil, false
+}
+
+func (c *_collection) isExist(filename string, err error) (bool, error) {
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false, err
+	}
+	if !info.IsDir() {
+		return true, nil
+	}
+	return false, nil
+}
+
+func UnGzip(record []byte) (result []byte, err error) {
+	var buffer bytes.Buffer
+	_, err = buffer.Write(record)
+	if err != nil {
+		return record, err
+	}
+	reader, err := gzip.NewReader(&buffer)
+
+	result, err = io.ReadAll(reader)
+	if err != nil {
+		return record, err
+	}
+
+	err = reader.Close()
+	if err != nil {
+		return record, nil
+	}
+
+	return
+}
+
+func (c *_collection) Gzip(data []byte) (result []byte, err error) {
+	var buffer bytes.Buffer
+	writer := gzip.NewWriter(&buffer)
+	_, err = writer.Write(data)
+	if err != nil {
+		return data, err
+	}
+	err = writer.Close()
+	result = buffer.Bytes()
+	return result, err
 }
