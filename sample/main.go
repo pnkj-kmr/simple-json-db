@@ -8,7 +8,7 @@ import (
 
 func main() {
 	// db instance
-	db, err := simplejsondb.New("database1", nil)
+	db, err := simplejsondb.New("database1", &simplejsondb.Options{UseGzip: true})
 	if err != nil {
 		fmt.Println(err)
 		return
