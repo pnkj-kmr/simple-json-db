@@ -3,61 +3,45 @@ package simplejsondb
 import (
 	"bytes"
 	"compress/gzip"
-	"fmt"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-
-	zrl "github.com/pnkj-kmr/zap-rotate-logger"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
-var Ext string = ".json"
-var GZipExt string = ".json.gz"
+var (
+	Ext            string = ".json"
+	GZipExt        string = ".json.gz"
+	ErrNoDirectory error  = errors.New("not a directory")
+)
 
 type (
 	// Options - extra configuration
 	Options struct {
 		UseGzip bool
-		Logger
 	}
 
-	CreateOptions struct {
-		UseGzip bool
-	}
-
-	_db struct {
+	db struct {
 		useGzip bool
 		path    string
-		logger  Logger
 	}
 
-	_collection struct {
+	collection struct {
 		useGzip bool
 		mu      sync.Mutex
 		name    string
 		path    string
-		logger  Logger
 	}
 )
 
 type (
-	// Logger - logging interface
-	Logger interface {
-		Error(string, ...zapcore.Field)
-		Warn(string, ...zapcore.Field)
-		Info(string, ...zapcore.Field)
-		Debug(string, ...zapcore.Field)
-	}
-
 	// Collection - it's like a table name
 	Collection interface {
 		Get(string) ([]byte, error)
 		GetAll() [][]byte
-		Create(string, []byte, ...CreateOptions) error
+		Create(string, []byte, ...Options) error
 		Delete(string) error
 	}
 	// DB - a database
@@ -67,44 +51,38 @@ type (
 )
 
 // New - a database instance
-func New(dbname string, options *Options) (db DB, err error) {
+func New(dbname string, options *Options) (DB, error) {
 	opts := Options{}
 	if options != nil {
 		opts = *options
 	}
-	if opts.Logger == nil {
-		opts.Logger = zrl.New()
-	}
-	// initiating db
+
 	dbpath := filepath.Join(dbname)
-	_, err = getOrCreateDir(dbpath)
+	_, err := getOrCreateDir(dbpath)
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
-	return &_db{path: dbpath, logger: opts.Logger, useGzip: opts.UseGzip}, nil
+
+	return &db{path: dbpath, useGzip: opts.UseGzip}, nil
 }
 
 // Collection returns the collection or table
-func (db *_db) Collection(name string) (c Collection, err error) {
-	collection := filepath.Join(db.path, name)
-	dir, err := getOrCreateDir(collection)
+func (db *db) Collection(name string) (Collection, error) {
+	c := filepath.Join(db.path, name)
+	dir, err := getOrCreateDir(c)
 	if err != nil {
-		db.logger.Error("unable to create db directory", zap.Error(err))
 		return nil, err
 	}
 	if !dir.IsDir() {
-		db.logger.Error("not a db directory")
-		return nil, fmt.Errorf("not a directory")
+		return nil, ErrNoDirectory
 	}
-	return &_collection{name: name, path: collection, logger: db.logger, useGzip: db.useGzip}, nil
+	return &collection{name: name, path: c, useGzip: db.useGzip}, nil
 }
 
 // GetAll - returns all records
-func (c *_collection) GetAll() (data [][]byte) {
+func (c *collection) GetAll() (data [][]byte) {
 	records, err := os.ReadDir(c.path)
 	if err != nil {
-		c.logger.Error("no data available")
 		return
 	}
 	for _, r := range records {
@@ -112,15 +90,11 @@ func (c *_collection) GetAll() (data [][]byte) {
 			fPath := filepath.Join(c.path, r.Name())
 			record, err := os.ReadFile(fPath)
 			if err != nil {
-				c.logger.Error("unable to read the data file", zap.String("path", fPath))
-				continue
+				continue // skipping a file which has issue
 			}
 
 			if strings.LastIndex(r.Name(), GZipExt) > 0 {
-				record, err = UnGzip(record)
-				if err != nil {
-					c.logger.Error("unable to unzip the data file", zap.String("path", fPath))
-				}
+				record, _ = UnGzip(record) // skipping ungip error over mutli file fetch
 			}
 
 			data = append(data, record)
@@ -130,25 +104,25 @@ func (c *_collection) GetAll() (data [][]byte) {
 }
 
 // Get help to retrive key based record
-func (c *_collection) Get(key string) (data []byte, err error) {
+func (c *collection) Get(key string) (data []byte, err error) {
 	filename, err, isGzip := c.getPathIfExist(key, err)
 	data, err = os.ReadFile(filename)
 	if err != nil {
-		c.logger.Error("unable to read the record", zap.Error(err))
+		return
 	}
 
 	if isGzip {
-		data, err = UnGzip(data)
-		if err != nil {
-			c.logger.Error("unable to unzip the data file", zap.String("path", filename))
+		_data, _err := UnGzip(data)
+		if _err != nil {
+			return _data, _err
 		}
+		data, err = _data, _err
 	}
-
 	return
 }
 
 // Insert - helps to save data into model dir
-func (c *_collection) Create(key string, data []byte, options ...CreateOptions) (err error) {
+func (c *collection) Create(key string, data []byte, options ...Options) (err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	var useGzip bool = c.useGzip
@@ -158,22 +132,17 @@ func (c *_collection) Create(key string, data []byte, options ...CreateOptions) 
 		}
 	}
 	filename := c.getFullPath(key, c.useGzip)
-	if err != nil {
-		c.logger.Error("unable to create record", zap.Error(err))
-	}
-
 	if useGzip {
-		data, err = c.Gzip(data)
+		data, err = Gzip(data)
+		if err != nil {
+			return err
+		}
 	}
-	err = os.WriteFile(filename, data, os.ModePerm)
-	if err != nil {
-		c.logger.Error("unable to create record", zap.Error(err))
-	}
-	return
+	return os.WriteFile(filename, data, os.ModePerm)
 }
 
 // Delete - helps to delete model dir record
-func (c *_collection) Delete(key string) (err error) {
+func (c *collection) Delete(key string) (err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -182,12 +151,7 @@ func (c *_collection) Delete(key string) (err error) {
 		return err
 	}
 
-	err = os.Remove(filename)
-	if err != nil {
-		c.logger.Error("unable to delete record", zap.Error(err))
-	}
-
-	return
+	return os.Remove(filename)
 }
 
 func getOrCreateDir(path string) (os.FileInfo, error) {
@@ -210,7 +174,7 @@ func getOrCreateDir(path string) (os.FileInfo, error) {
 	return f, nil
 }
 
-func (c *_collection) getFullPath(key string, isGzip bool) string {
+func (c *collection) getFullPath(key string, isGzip bool) string {
 	var record string
 	if isGzip {
 		record = key + GZipExt
@@ -222,7 +186,7 @@ func (c *_collection) getFullPath(key string, isGzip bool) string {
 	return filename
 }
 
-func (c *_collection) getPathIfExist(key string, err error) (string, error, bool) {
+func (c *collection) getPathIfExist(key string, err error) (string, error, bool) {
 	record := key + Ext
 	filename := filepath.Join(c.path, record)
 
@@ -239,7 +203,7 @@ func (c *_collection) getPathIfExist(key string, err error) (string, error, bool
 	return filename, nil, false
 }
 
-func (c *_collection) isExist(filename string, err error) (bool, error) {
+func (c *collection) isExist(filename string, err error) (bool, error) {
 	info, err := os.Stat(filename)
 	if os.IsNotExist(err) {
 		return false, err
@@ -271,7 +235,7 @@ func UnGzip(record []byte) (result []byte, err error) {
 	return
 }
 
-func (c *_collection) Gzip(data []byte) (result []byte, err error) {
+func Gzip(data []byte) (result []byte, err error) {
 	var buffer bytes.Buffer
 	writer := gzip.NewWriter(&buffer)
 	_, err = writer.Write(data)
