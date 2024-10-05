@@ -43,6 +43,7 @@ type (
 		GetAll() [][]byte
 		Create(string, []byte, ...Options) error
 		Delete(string) error
+		Len() uint64
 	}
 	// DB - a database
 	DB interface {
@@ -152,6 +153,11 @@ func (c *collection) Delete(key string) (err error) {
 	}
 
 	return os.Remove(filename)
+}
+
+func (c *collection) Len() uint64 {
+	records, _ := os.ReadDir(c.path)
+	return uint64(len(records))
 }
 
 func getOrCreateDir(path string) (os.FileInfo, error) {

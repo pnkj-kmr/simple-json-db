@@ -289,3 +289,36 @@ func TestCollection_Delete(t *testing.T) {
 		t.Error("Test failed", err)
 	}
 }
+
+func TestCollection_Len(t *testing.T) {
+	path := randName(6)
+	defer remove(path)
+	db, err := simplejsondb.New(path, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	table := "collection1"
+	c, err := db.Collection(table)
+	defer remove(path, table)
+	if err != nil {
+		t.Error(err)
+	}
+
+	total := c.Len()
+	if total != 0 {
+		t.Error("record should zero")
+	}
+
+	var data []byte
+	data = append(data, 99)
+	err = c.Create("ip-dummy", data)
+	if err != nil {
+		t.Error("Test failed - ", err)
+	}
+	defer remove(path, table, "ip-dummy.json")
+
+	total = c.Len()
+	if total != 1 {
+		t.Error("record should 1")
+	}
+}
