@@ -81,6 +81,39 @@ func TestCollection_GetAll(t *testing.T) {
 	}
 }
 
+func TestCollection_GetAllByName(t *testing.T) {
+	path := randName(4)
+	defer remove(path)
+	db, err := simplejsondb.New(path, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	table := randName(5)
+	c, err := db.Collection(table)
+	defer remove(path, table)
+	if err != nil {
+		t.Error(err)
+	}
+
+	data := c.GetAllByName()
+	if len(data) != 0 {
+		t.Error("zero count expected")
+	}
+
+	var data2 []byte
+	data2 = append(data2, 99)
+	err = c.Create("ip-dummy", data2)
+	if err != nil {
+		t.Error("Test failed - ", err)
+	}
+	defer remove(path, table, "ip-dummy.json")
+
+	data = c.GetAllByName()
+	if len(data) != 1 {
+		t.Error("zero count expected")
+	}
+}
+
 func TestCollection_GetAllGzip(t *testing.T) {
 	path := randName(4)
 	defer remove(path)

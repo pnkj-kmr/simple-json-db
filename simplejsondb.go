@@ -41,6 +41,7 @@ type (
 	Collection interface {
 		Get(string) ([]byte, error)
 		GetAll() [][]byte
+		GetAllByName() map[string][]byte
 		Create(string, []byte, ...Options) error
 		Delete(string) error
 		Len() uint64
@@ -99,6 +100,33 @@ func (c *collection) GetAll() (data [][]byte) {
 			}
 
 			data = append(data, record)
+		}
+	}
+	return
+}
+
+// GetAllByName - returns all records
+func (c *collection) GetAllByName() (data map[string][]byte) {
+	data = make(map[string][]byte)
+
+	records, err := os.ReadDir(c.path)
+	if err != nil {
+		return
+	}
+	for _, r := range records {
+		if !r.IsDir() {
+			fPath := filepath.Join(c.path, r.Name())
+			record, err := os.ReadFile(fPath)
+			if err != nil {
+				continue // skipping a file which has issue
+			}
+
+			if strings.LastIndex(r.Name(), GZipExt) > 0 {
+				record, _ = UnGzip(record) // skipping ungip error over mutli file fetch
+			}
+
+			name := strings.TrimSuffix(r.Name(), Ext)
+			data[name] = record
 		}
 	}
 	return
