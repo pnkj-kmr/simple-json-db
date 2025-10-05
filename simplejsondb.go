@@ -17,6 +17,15 @@ var (
 	ErrNoDirectory error  = errors.New("not a directory")
 )
 
+const (
+	// ModeRead acquires a shared read lock.
+	ModeRead LockMode = iota
+	// ModeWrite acquires an exclusive write lock.
+	ModeWrite
+	// ModeReadWrite is an alias for write (exclusive) lock.
+	ModeReadWrite
+)
+
 type (
 	// Options - extra configuration
 	Options struct {
@@ -29,12 +38,23 @@ type (
 	}
 
 	collection struct {
-		useGzip bool
-		mu      sync.Mutex
-		name    string
-		path    string
+		useGzip   bool
+		mu        sync.RWMutex
+		name      string
+		path      string
+		recMu     sync.Mutex
+		recLocks  map[string]*sync.RWMutex
+		recStates map[string]*lockState
 	}
+	// LockMode is an enum for lock modes used by manual locking APIs.
+	LockMode int
 )
+
+// internal lock state tracking per ID to support safe unlock semantics
+type lockState struct {
+	r int // number of outstanding read locks acquired via LockID
+	w int // number of outstanding write locks acquired via LockID (0 or 1)
+}
 
 type (
 	// Collection - it's like a table name
@@ -45,6 +65,8 @@ type (
 		Create(string, []byte, ...Options) error
 		Delete(string) error
 		Len() uint64
+		LockID(id string, mode LockMode)
+		UnlockID(id string, mode LockMode)
 	}
 	// DB - a database
 	DB interface {
@@ -279,4 +301,107 @@ func Gzip(data []byte) (result []byte, err error) {
 	err = writer.Close()
 	result = buffer.Bytes()
 	return result, err
+}
+
+// helper: returns the RWMutex for a specific record ID, creating it if needed
+func (c *collection) getRecordLock(id string) *sync.RWMutex {
+	c.recMu.Lock()
+	defer c.recMu.Unlock()
+	if c.recLocks == nil {
+		c.recLocks = make(map[string]*sync.RWMutex)
+	}
+	l, ok := c.recLocks[id]
+	if !ok || l == nil {
+		l = &sync.RWMutex{}
+		c.recLocks[id] = l
+	}
+	return l
+}
+
+// helper: returns the RWMutex for a specific record ID if it exists; does not create it
+func (c *collection) getRecordLockIfExists(id string) *sync.RWMutex {
+	c.recMu.Lock()
+	defer c.recMu.Unlock()
+	if c.recLocks == nil {
+		return nil
+	}
+	return c.recLocks[id]
+}
+
+// helper: returns the lockState for a specific ID, creating it if needed
+func (c *collection) getOrCreateState(id string) *lockState {
+	c.recMu.Lock()
+	defer c.recMu.Unlock()
+	if c.recStates == nil {
+		c.recStates = make(map[string]*lockState)
+	}
+	st, ok := c.recStates[id]
+	if !ok || st == nil {
+		st = &lockState{}
+		c.recStates[id] = st
+	}
+	return st
+}
+
+// helper: returns the lockState for a specific ID if it exists; does not create it
+func (c *collection) getStateIfExists(id string) *lockState {
+	c.recMu.Lock()
+	defer c.recMu.Unlock()
+	if c.recStates == nil {
+		return nil
+	}
+	return c.recStates[id]
+}
+
+// LockID allows manual locking for a specific record ID.
+func (c *collection) LockID(id string, mode LockMode) {
+	l := c.getRecordLock(id)
+	st := c.getOrCreateState(id)
+	switch mode {
+	case ModeRead:
+		st.r++
+		l.RLock()
+	case ModeReadWrite:
+		st.r++
+		st.w++
+		l.Lock()
+	default: // write/read_write/other (exclusive)
+		st.w++
+		l.Lock()
+	}
+}
+
+// UnlockID releases a previously acquired lock for a specific record ID.
+// mode should match the mode used in LockID.
+func (c *collection) UnlockID(id string, mode LockMode) {
+	// Do not create a new lock when unlocking; if lock/state don't exist, it's a no-op
+	l := c.getRecordLockIfExists(id)
+	st := c.getStateIfExists(id)
+	if l == nil || st == nil {
+		return
+	}
+	switch mode {
+	case ModeRead:
+		if st.r <= 0 {
+			panic("double unlock: read lock not held")
+		}
+		st.r--
+		l.RUnlock()
+	case ModeReadWrite:
+		if st.r <= 0 {
+			panic("double unlock: read lock not held")
+		}
+		if st.w <= 0 {
+			panic("double unlock: write lock not held")
+		}
+		st.r--
+		st.w--
+		l.Unlock()
+	default: // write/read_write/other (exclusive)
+		if st.w <= 0 {
+			panic("double unlock: write lock not held")
+		}
+		st.w--
+		l.Unlock()
+	}
 }
