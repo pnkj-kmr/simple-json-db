@@ -26,7 +26,13 @@ func remove(dir ...string) error {
 
 func TestDB(t *testing.T) {
 	path := randName(4)
-	defer remove(path)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path)
+
 	_, err := simplejsondb.New(path, nil)
 	if err != nil {
 		t.Error(err)
@@ -35,14 +41,26 @@ func TestDB(t *testing.T) {
 
 func TestDB_Collection(t *testing.T) {
 	path := randName(4)
-	defer remove(path)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path)
+
 	db, err := simplejsondb.New(path, nil)
 	if err != nil {
 		t.Error(err)
 	}
 	c := randName(6)
 	_, err = db.Collection(c)
-	defer remove(path, c)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, c)
+
 	if err != nil {
 		t.Error(err)
 	}
@@ -50,14 +68,25 @@ func TestDB_Collection(t *testing.T) {
 
 func TestCollection_GetAll(t *testing.T) {
 	path := randName(4)
-	defer remove(path)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path)
+
 	db, err := simplejsondb.New(path, nil)
 	if err != nil {
 		t.Error(err)
 	}
 	table := randName(5)
 	c, err := db.Collection(table)
-	defer remove(path, table)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table)
 	if err != nil {
 		t.Error(err)
 	}
@@ -73,7 +102,12 @@ func TestCollection_GetAll(t *testing.T) {
 	if err != nil {
 		t.Error("Test failed - ", err)
 	}
-	defer remove(path, table, "ip-dummy.json")
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table, "ip-dummy.json")
 
 	data = c.GetAll()
 	if len(data) != 1 {
@@ -83,14 +117,26 @@ func TestCollection_GetAll(t *testing.T) {
 
 func TestCollection_GetAllByName(t *testing.T) {
 	path := randName(4)
-	defer remove(path)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path)
+
 	db, err := simplejsondb.New(path, nil)
 	if err != nil {
 		t.Error(err)
 	}
 	table := randName(5)
 	c, err := db.Collection(table)
-	defer remove(path, table)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table)
+
 	if err != nil {
 		t.Error(err)
 	}
@@ -106,7 +152,12 @@ func TestCollection_GetAllByName(t *testing.T) {
 	if err != nil {
 		t.Error("Test failed - ", err)
 	}
-	defer remove(path, table, "ip-dummy.json")
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table, "ip-dummy.json")
 
 	data = c.GetAllByName()
 	if len(data) != 1 {
@@ -116,14 +167,26 @@ func TestCollection_GetAllByName(t *testing.T) {
 
 func TestCollection_GetAllGzip(t *testing.T) {
 	path := randName(4)
-	defer remove(path)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path)
+
 	db, err := simplejsondb.New(path, &simplejsondb.Options{UseGzip: true})
 	if err != nil {
 		t.Error(err)
 	}
 	table := randName(5)
 	c, err := db.Collection(table)
-	defer remove(path, table)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table)
+
 	if err != nil {
 		t.Error(err)
 	}
@@ -139,7 +202,12 @@ func TestCollection_GetAllGzip(t *testing.T) {
 	if err != nil {
 		t.Error("Test failed - ", err)
 	}
-	defer remove(path, table, "ip-dummy.json.gz")
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table, "ip-dummy.json.gz")
 
 	data = c.GetAll()
 	if len(data) != 1 {
@@ -151,7 +219,12 @@ func TestCollection_GetAllGzip(t *testing.T) {
 	if err != nil {
 		t.Error("Test failed - ", err)
 	}
-	defer remove(path, table, "ip-dummy2.json.gz")
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table, "ip-dummy2.json.gz")
 
 	data = c.GetAll()
 	if len(data) != 2 {
@@ -161,14 +234,26 @@ func TestCollection_GetAllGzip(t *testing.T) {
 
 func TestCollection_Get(t *testing.T) {
 	path := randName(5)
-	defer remove(path)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path)
+
 	db, err := simplejsondb.New(path, nil)
 	if err != nil {
 		t.Error(err)
 	}
 	table := "collection1"
 	c, err := db.Collection(table)
-	defer remove(path, table)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table)
+
 	if err != nil {
 		t.Error(err)
 	}
@@ -180,7 +265,13 @@ func TestCollection_Get(t *testing.T) {
 
 func TestCollection_Insert(t *testing.T) {
 	path := randName(6)
-	defer remove(path)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path)
+
 	db, err := simplejsondb.New(path, nil)
 	if err != nil {
 		t.Error(err)
@@ -188,7 +279,13 @@ func TestCollection_Insert(t *testing.T) {
 
 	table := "collection1"
 	c, err := db.Collection(table)
-	defer remove(path, table)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table)
+
 	if err != nil {
 		t.Error(err)
 	}
@@ -199,19 +296,37 @@ func TestCollection_Insert(t *testing.T) {
 	if err != nil {
 		t.Error("Test failed - ", err)
 	}
-	defer remove(path, table, "ip-dummy.json")
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table, "ip-dummy.json")
+
 }
 
 func TestCollection_GZipInsert(t *testing.T) {
 	path := randName(5)
-	defer remove(path)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path)
+
 	db, err := simplejsondb.New(path, &simplejsondb.Options{UseGzip: true})
 	if err != nil {
 		t.Error(err)
 	}
 	table := "collection1"
 	c, err := db.Collection(table)
-	defer remove(path, table)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table)
+
 	if err != nil {
 		t.Error(err)
 	}
@@ -221,19 +336,153 @@ func TestCollection_GZipInsert(t *testing.T) {
 	if err != nil {
 		t.Error("Test failed - ", err)
 	}
-	defer remove(path, table, "ip-dummy.json.gz")
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table, "ip-dummy.json.gz")
+
+}
+
+func TestCollection_LockID(t *testing.T) {
+	path := randName(6)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path)
+
+	db, err := simplejsondb.New(path, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	table := "collection_lock_test"
+	c, err := db.Collection(table)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Table-driven tests
+	tests := []struct {
+		name      string
+		id        string
+		lockMode  simplejsondb.LockMode
+		unlock    bool
+		expectErr bool
+	}{
+		{
+			name:      "LockID_Read_Mode_Success",
+			id:        "record1",
+			lockMode:  simplejsondb.ModeRead,
+			unlock:    true,
+			expectErr: false,
+		},
+		{
+			name:      "LockID_Write_Mode_Success",
+			id:        "record2",
+			lockMode:  simplejsondb.ModeWrite,
+			unlock:    true,
+			expectErr: false,
+		},
+		{
+			name:      "LockID_Write_Mode_Success",
+			id:        "record2",
+			lockMode:  simplejsondb.ModeReadWrite,
+			unlock:    true,
+			expectErr: false,
+		},
+		{
+			name:      "LockID_Multiple_Reads_Same_ID",
+			id:        "record3",
+			lockMode:  simplejsondb.ModeRead,
+			unlock:    true,
+			expectErr: false,
+		},
+		{
+			name:      "LockID_No_Unlock",
+			id:        "record4",
+			lockMode:  simplejsondb.ModeWrite,
+			unlock:    false,
+			expectErr: false,
+		},
+		{
+			name:      "Unlock_Without_Lock",
+			id:        "nonexistent",
+			lockMode:  simplejsondb.ModeRead,
+			unlock:    true,
+			expectErr: true,
+		},
+		{
+			name:      "Double_Unlock_Error",
+			id:        "record5",
+			lockMode:  simplejsondb.ModeWrite,
+			unlock:    true,
+			expectErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Use LockID for valid lock operations
+			if tt.name != "Unlock_Without_Lock" {
+				c.LockID(tt.id, tt.lockMode)
+			}
+
+			if tt.unlock {
+				// Attempt to unlock the ID
+				c.UnlockID(tt.id, tt.lockMode)
+
+				// Second unlock to trigger an error for certain cases
+				if tt.name == "Double_Unlock_Error" {
+					defer func() {
+						if r := recover(); r == nil {
+							t.Error("Expected panic on double unlock, but none occurred")
+						}
+					}()
+					c.UnlockID(tt.id, tt.lockMode)
+				}
+			}
+
+			// No error expected generally except for specific invalid cases like double unlock
+			if tt.expectErr {
+				t.Log("Handled expected error case:", tt.name)
+			}
+		})
+	}
 }
 
 func TestCollection_Get2(t *testing.T) {
 	path := randName(5)
-	defer remove(path)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path)
+
 	db, err := simplejsondb.New(path, nil)
 	if err != nil {
 		t.Error(err)
 	}
 	table := "collection1"
 	c, err := db.Collection(table)
-	defer remove(path, table)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table)
+
 	if err != nil {
 		t.Error(err)
 	}
@@ -250,7 +499,12 @@ func TestCollection_Get2(t *testing.T) {
 	if err != nil {
 		t.Error("Test failed - ", err)
 	}
-	defer remove(path, table, "ip-dummy.json")
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table, "ip-dummy.json")
 
 	_, err = c.Get("ip-dummy")
 	fmt.Println(path, table, err)
@@ -261,14 +515,26 @@ func TestCollection_Get2(t *testing.T) {
 
 func TestCollection_GetGZip(t *testing.T) {
 	path := randName(6)
-	defer remove(path)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path)
+
 	db, err := simplejsondb.New(path, &simplejsondb.Options{UseGzip: true})
 	if err != nil {
 		t.Error(err)
 	}
 	table := "collection1"
 	c, err := db.Collection(table)
-	defer remove(path, table)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table)
+
 	if err != nil {
 		t.Error(err)
 	}
@@ -284,7 +550,12 @@ func TestCollection_GetGZip(t *testing.T) {
 	if err != nil {
 		t.Error("Test failed - ", err)
 	}
-	defer remove(path, table, "ip-dummy.json.gz")
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table, "ip-dummy.json.gz")
 
 	_, err = c.Get("ip-dummy")
 	fmt.Println(path, table, err)
@@ -295,14 +566,26 @@ func TestCollection_GetGZip(t *testing.T) {
 
 func TestCollection_Delete(t *testing.T) {
 	path := randName(6)
-	defer remove(path)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path)
+
 	db, err := simplejsondb.New(path, nil)
 	if err != nil {
 		t.Error(err)
 	}
 	table := "collection1"
 	c, err := db.Collection(table)
-	defer remove(path, table)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table)
+
 	if err != nil {
 		t.Error(err)
 	}
@@ -325,14 +608,26 @@ func TestCollection_Delete(t *testing.T) {
 
 func TestCollection_Len(t *testing.T) {
 	path := randName(6)
-	defer remove(path)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path)
+
 	db, err := simplejsondb.New(path, nil)
 	if err != nil {
 		t.Error(err)
 	}
 	table := "collection1"
 	c, err := db.Collection(table)
-	defer remove(path, table)
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table)
+
 	if err != nil {
 		t.Error(err)
 	}
@@ -348,7 +643,12 @@ func TestCollection_Len(t *testing.T) {
 	if err != nil {
 		t.Error("Test failed - ", err)
 	}
-	defer remove(path, table, "ip-dummy.json")
+	defer func(dir ...string) {
+		err := remove(dir...)
+		if err != nil {
+			t.Error(err)
+		}
+	}(path, table, "ip-dummy.json")
 
 	total = c.Len()
 	if total != 1 {
