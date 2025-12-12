@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	simplejsondb "github.com/pnkj-kmr/simple-json-db"
+	"github.com/pnkj-kmr/simple-json-db"
 )
 
 func main() {
